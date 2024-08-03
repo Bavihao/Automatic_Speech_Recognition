@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Recognition</title>
+    <script src="/static/js/jquery-3.6.4.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .container_handle {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .record,
+        .upload {
+            width: 47.5%;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 20px;
+        }
+
+        .chat-container {
+            max-width: 100%;
+            height: 350px;
+            margin-top: 3%;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .trans-container {
+            max-width: 100%;
+            height: 350px;
+            margin-top: 1%;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .time_run_micro,
+        #time_run {
+            margin-top: 10px;
+        }
+
+        .upload label,
+        .upload button {
+            display: block;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .form-upload {
+            display: flex;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container_handle">
+        <div class="record">
+            <button onclick="startRecording()">Start Recording</button>
+            <button onclick="stopRecording()">Stop Recording</button>
+            <h2>Chat History</h2>
+            <div id="result-micro" class="chat-container"></div>
+            <br>
+            <div>
+                <button id="downloadBtn">Download File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordingInterval;
+        let resultMicroHistory = [];
+
+        async function startRecording() {
+            if (confirm('Start Recording?')) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    if (stream) {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
+                        };
+
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            sendAudioData(audioBlob);
+                            audioChunks = [];
+                        };
+
+                        console.log('chunks ', audioChunks)
+                        recordingInterval = setInterval(() => {
+                            mediaRecorder.stop();
+                            setTimeout(() => {
+                                mediaRecorder.start();
+                            }, 100);
+                        }, 7000);
+                        mediaRecorder.start();
+                    } else {
+                        alert('Không thể truy cập âm thanh. Hãy kiểm tra quyền truy cập của bạn.');
+                    }
+                } catch (error) {
+                    alert('Lỗi khi truy cập âm thanh: ' + error.message);
+                }
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                clearInterval(recordingInterval);
+                mediaRecorder.stop();
+            }
+            alert('Stop Recording!')
+        }
+
+        function sendAudioData(audioBlob) {
+            const formData = new FormData();
+            const filename = generateUniqueFilename(); // Tạo tên file duy nhất
+            formData.append('audio_blob', audioBlob, filename);
+            console.log('audio_blob:: ', audioBlob)
+            $.ajax({
+                url: '/process_audio',
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                enctype: 'multipart/form-data',
+                cache: false, // Tắt cache
+                success: function (response) {
+                    resultMicroHistory.push(response);
+                    addMessageToChat(response);
+                },
+                error: function (error) {
+                    alert('Error: ' + error.statusText);
+                }
+            });
+        }
+
+        function generateUniqueFilename() {
+            const timestamp = new Date().getTime(); 
+            return 'audio_' + timestamp + '.wav';
+        }
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Recorder</title>
+</head>
+<body>
+  <button onclick="startRecording(5)">Start Recording</button>
+  <button onclick="stopRecording()">Stop Recording</button>
+  <script>
+    
+    const sleep = time => new Promise(resolve => setTimeout(resolve, time));
+    const b2text = blob => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = e => resolve(e.srcElement.result);
+      reader.readAsDataURL(blob);
+    });
+    var record = time => new Promise(async resolve => {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorder = new MediaRecorder(stream);
+      chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.start();
+      await sleep(time);
+      recorder.onstop = async () => {
+        blob = new Blob(chunks);
+        text = await b2text(blob);
+        resolve(text);
+      };
+      recorder.stop();
+    });
+
+    function startRecording(seconds) {
+      console.log("Start recording...");
+      record(seconds * 1000)
+        .then(audioData => {
+          sendToServer(audioData);
+        })
+        .catch(error => {
+          console.error("Error recording:", error);
+        });
+    };
+
+    function stopRecording(){
+        console.log("click stop record!")
+    };
+
+    function sendToServer(audioData) {
+      // Send audio data to the server for processing
+      fetch("/process_audio", {
+        method: "POST",
+        body: JSON.stringify({ audioData: audioData }),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+        .then(response => response.json())
+        .then(result => {
+          console.log("Transcription result from server:", result);
+          alert("Transcription result: " + result.transcription);
+        })
+        .catch(error => {
+          console.error("Error processing audio on server:", error);
+        });
+    }
+  </script>
+</body>
+</html>

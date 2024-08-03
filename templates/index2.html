@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns="http://www.w3.org/1999/html">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="/static/js/FileSaver.min.js"></script>
+    <title>Translate Text</title>
+</head>
+
+<body>
+    <div class="container" style="text-align: center;">
+        <h1>Translate Text</h1>
+        <button onclick="window.location.href = 'https://127.0.0.1:2468'">Back Home</button>
+        <form id="translationForm">
+            <label for="inputText">Nhập văn bản:</label><br>
+            <textarea id="inputText" name="inputText" rows="22" cols="150"></textarea><br>
+            <button type="button" id="textTranslateButton" onclick="translateFromText()">Tóm tắt văn bản</button>
+            <br>
+            <br>
+            <label for="fileInput">Hoặc tải lên tệp tin:</label><br>
+            <input type="file" id="fileInput" name="fileInput">
+            <button id="deleteFileButton" onclick="deleteFile()">Xóa</button><br><br>
+            <button type="button" onclick="translateFromFile()" id="fileTranslateButton">Tóm tắt tệp tin</button>
+        </form>
+        <div>
+            <label for="samsum_result">Kết quả dịch:</label><br>
+            <textarea id="samsum_result" rows="22" cols="150"></textarea>
+            <br>
+            <button onclick="downloadResult()">Tải Kết Quả</button>
+        </div>
+    </div>
+
+    <script>
+        function translateFromText() {
+            var formData = {
+                text: document.getElementById('inputText').value
+            };
+            fetch('/samsum', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('samsum_result').innerText = data.translations.join('\n\n');
+                })
+                .catch(error => {
+                    console.error('Lỗi:', error);
+                });
+        }
+
+        function translateFromFile() {
+            var file = document.getElementById('fileInput').files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function (event) {
+                    var formData = {
+                        text: event.target.result
+                    };
+                    fetch('/samsum', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            document.getElementById('samsum_result').innerText = data.translations.join('\n\n');
+                        })
+                        .catch(error => {
+                            console.error('Lỗi:', error);
+                        });
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function deleteFile() {
+            document.getElementById('fileInput').value = "";
+        }
+
+        function downloadResult() {
+            var resultText = document.getElementById('samsum_result').value;
+            var blob = new Blob([resultText], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, "ket_qua_dich.txt");
+        }
+    </script>
+</body>
+
+</html>

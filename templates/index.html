@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Recognition</title>
+    <script src="/static/js/jquery-3.6.4.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .container_handle {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px;
+        }
+
+        .record,
+        .upload {
+            width: 47.5%;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 20px;
+        }
+
+        .chat-container {
+            max-width: 100%;
+            height: 350px;
+            margin-top: 3%;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .trans-container {
+            max-width: 100%;
+            height: 350px;
+            margin-top: 1%;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .time_run_micro,
+        #time_run {
+            margin-top: 10px;
+        }
+
+        .upload label,
+        .upload button {
+            display: block;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .form-upload {
+            display: flex;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Speech Recognition</h1>
+    <div class="container_handle">
+        <div class="record">
+            <button onclick="startRecording()">Start Recording</button>
+            <button onclick="stopRecording()">Stop Recording</button>
+            <button onclick="window.location.href = 'https://127.0.0.1:2468'">Back Home</button>
+            <p>==========================================</p>
+            <form id="audioForm">
+                <label for="source_lang">Source Language:</label>
+                <select id="source_lang">
+                    <option value="Vietnamese">Vietnamese</option>
+                    <option value="English">English</option>
+                    <option value="Chinese">Chinese</option>
+                </select>
+        
+                <label for="target_lang">Target Language:</label>
+                <select id="target_lang">
+                    <option value="translate">translate</option>
+                    <option value="null">No</option>
+                </select>
+            </form>
+
+            <h3>Lịch Sử Trò Chuyện</h3>
+            <div id="result-micro" class="chat-container"></div>
+            <br>
+            <div>
+                <button id="downloadBtn">Download File</button>
+            </div>
+        </div>
+        <div class="upload">
+            <div class="form-upload">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <label for="audioFile">Chọn file âm thanh:</label>
+                    <input type="file" id="audioFile" accept=".wav, .ogg, .mp3" />
+                    <button type="button" onclick="uploadAudio()">Tải lên</button>
+                </form>
+            </div>
+            <div id="result" class="trans-container"></div>
+            <br>
+            <div id="time_run"></div>
+            <div>
+                <button id="#">Download File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("downloadBtn").addEventListener("click", function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/download", true);
+            xhr.responseType = "blob";
+            xhr.onload = function() {
+                if (this.status === 200) {
+                    var blob = this.response;
+                    var link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = "micro_result.txt";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            };
+            xhr.send();
+        });
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordingInterval;
+        let resultMicroHistory = [];
+
+        function addMessageToChat(message) {
+            let chatContainer = document.getElementById('result-micro');
+            let messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.textContent = message;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function startRecording() {
+            if (confirm('Start Recording?')) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                    if (stream) {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
+                        };
+
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            sendAudioData(audioBlob);
+                            audioChunks = [];
+                        };
+
+                        recordingInterval = setInterval(() => {
+                            mediaRecorder.stop();
+                            setTimeout(() => {
+                                mediaRecorder.start();
+                            }, 25);
+                        }, 3500);
+                        mediaRecorder.start();
+                    } else {
+                        alert('Không thể truy cập âm thanh. Hãy kiểm tra quyền truy cập của bạn.');
+                    }
+                } catch (error) {
+                    alert('Lỗi khi truy cập âm thanh: ' + error.message);
+                }
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                clearInterval(recordingInterval);
+                mediaRecorder.stop();
+            }
+            alert('Stop Recording!')
+        }
+
+        function sendAudioData(audioBlob) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const reader = new FileReader();
+            reader.readAsArrayBuffer(audioBlob);
+        
+            reader.onload = function () {
+                audioContext.decodeAudioData(reader.result, function (buffer) {
+                    const audioData = buffer.getChannelData(0);
+                    const threshold = 0.001;
+        
+                    // Tính toán trung bình
+                    let sum = 0;
+                    for (let i = 0; i < audioData.length; i++) {
+                        sum += audioData[i] * audioData[i];
+                    }
+                    const averageEnergy = sum / audioData.length;
+        
+                    // Kiểm tra trung bình
+                    if (averageEnergy >= threshold) {
+                        const formData = new FormData();
+                        formData.append('audio_blob', audioBlob);
+                        formData.append('source_lang', $('#source_lang').val());
+                        formData.append('target_lang', $('#target_lang').val());
+        
+                        $.ajax({
+                            url: '/process_micro',
+                            type: 'POST',
+                            data: formData,
+                            contentType: false,
+                            processData: false,
+                            enctype: 'multipart/form-data',
+                            cache: false,
+                            success: function (response) {
+                                resultMicroHistory.push(response);
+                                addMessageToChat(response);
+                            },
+                            error: function (error) {
+                                alert('Lỗi: ' + error.statusText);
+                            }
+                        });
+                    } else {
+                        console.log('Tần số âm thanh quá thấp. Không gửi dữ liệu lên server.');
+                    }
+                });
+            };
+        }  
+        
+        function uploadAudio() {
+            const fileInput = document.getElementById('audioFile');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const formData = new FormData();
+                formData.append('audio_blob', file);
+
+                $.ajax({
+                    url: '/process_audio',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function (response) {
+                        var resultDiv = document.getElementById('result');
+                        var time_run = document.getElementById('time_run')
+                        resultDiv.innerHTML = 'Result: ' + response['text'];
+                        time_run.innerHTML = 'Time Run : ' + response['time_run']
+                    },
+                    error: function (error) {
+                        alert('Error: ' + error.statusText);
+                    }
+                });
+            } else {
+                alert('Vui lòng chọn file âm thanh.');
+            }
+            alert('vui lòng chờ xử lý!')
+        }
+    </script>
+</body>
+
+</html>
